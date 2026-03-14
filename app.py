@@ -3,6 +3,7 @@ import fitz  # PyMuPDF
 from PIL import Image
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 import io
 
 st.title("Gerador de Etiquetas 40×25 mm – Zebra ZD220")
@@ -42,22 +43,31 @@ if uploaded_file:
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=(page_w_mm * mm, page_h_mm * mm))
 
+    # Desenha as etiquetas no PDF usando ImageReader
     for i in range(0, len(resized), 2):
         img1 = resized[i]
         img2 = resized[i+1] if i+1 < len(resized) else resized[i]
 
-        # Salva temporariamente as imagens
-        img1_io = io.BytesIO()
-        img1.save(img1_io, format="PNG")
-        img1_io.seek(0)
+        img1_reader = ImageReader(img1)
+        img2_reader = ImageReader(img2)
 
-        img2_io = io.BytesIO()
-        img2.save(img2_io, format="PNG")
-        img2_io.seek(0)
+        # Etiqueta 1
+        c.drawImage(
+            img1_reader,
+            0 * mm,
+            0 * mm,
+            width=etiqueta_w_mm * mm,
+            height=etiqueta_h_mm * mm
+        )
 
-        # Desenha as duas etiquetas no PDF
-        c.drawImage(img1_io, 0 * mm, 0 * mm, width=etiqueta_w_mm * mm, height=etiqueta_h_mm * mm)
-        c.drawImage(img2_io, 40 * mm, 0 * mm, width=etiqueta_w_mm * mm, height=etiqueta_h_mm * mm)
+        # Etiqueta 2
+        c.drawImage(
+            img2_reader,
+            40 * mm,
+            0 * mm,
+            width=etiqueta_w_mm * mm,
+            height=etiqueta_h_mm * mm
+        )
 
         c.showPage()
 
