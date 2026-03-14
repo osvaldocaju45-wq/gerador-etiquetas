@@ -1,10 +1,12 @@
 import streamlit as st
 import fitz  # PyMuPDF
 from PIL import Image
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
 import io
 
 st.title("Gerador de Etiquetas 40×25 mm – Zebra ZD220")
-st.write("Envie o PDF original da Shopee (60×40 mm). O app gera um PDF com duas etiquetas por página, reduzidas para 37,5×25 mm.")
+st.write("Envie o PDF original da Shopee (60×40 mm). O app gera um PDF com duas etiquetas por página, no tamanho real 80×25 mm.")
 
 uploaded_file = st.file_uploader("Envie o PDF original", type=["pdf"])
 
@@ -16,52 +18,57 @@ if uploaded_file:
 
     imagens = []
 
-    # Converte cada página em imagem com DPI maior
+    # Converte cada página em imagem com DPI alto
     for page in doc:
-        pix = page.get_pixmap(dpi=300)  # Aumenta nitidez
+        pix = page.get_pixmap(dpi=300)
         img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
         imagens.append(img)
 
-    # Tamanho final da etiqueta (em pixels a 300 DPI)
-    etiqueta_w = int(300 * 1.5)   # 37,5 mm
-    etiqueta_h = int(300 * 1.0)   # 25 mm
+    # Tamanho real da etiqueta (40×25 mm)
+    etiqueta_w_mm = 40
+    etiqueta_h_mm = 25
 
-    resized = [img.resize((etiqueta_w, etiqueta_h), Image.LANCZOS) for img in imagens]
+    # Converte mm → pixels (300 DPI)
+    etiqueta_w_px = int((etiqueta_w_mm / 25.4) * 300)
+    etiqueta_h_px = int((etiqueta_h_mm / 25.4) * 300)
 
-    # Página final (80 mm × 25 mm → 300 DPI)
-    page_w = int(300 * 3.0)   # 80 mm
-    page_h = etiqueta_h
+    # Redimensiona cada etiqueta
+    resized = [img.resize((etiqueta_w_px, etiqueta_h_px), Image.LANCZOS) for img in imagens]
 
-    final_pages = []
+    # Página final: 80×25 mm (duas etiquetas lado a lado)
+    page_w_mm = 80
+    page_h_mm = 25
+
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=(page_w_mm * mm, page_h_mm * mm))
 
     for i in range(0, len(resized), 2):
         img1 = resized[i]
         img2 = resized[i+1] if i+1 < len(resized) else resized[i]
 
-        # Página branca
-        page_img = Image.new("RGB", (page_w, page_h), "white")
+        # Salva temporariamente as imagens
+        img1_io = io.BytesIO()
+        img1.save(img1_io, format="PNG")
+        img1_io.seek(0)
 
-        # Centralização horizontal
-        margin = int((page_w - (etiqueta_w * 2)) / 3)
+        img2_io = io.BytesIO()
+        img2.save(img2_io, format="PNG")
+        img2_io.seek(0)
 
-        x1 = margin
-        x2 = margin * 2 + etiqueta_w
+        # Desenha as duas etiquetas no PDF
+        c.drawImage(img1_io, 0 * mm, 0 * mm, width=etiqueta_w_mm * mm, height=etiqueta_h_mm * mm)
+        c.drawImage(img2_io, 40 * mm, 0 * mm, width=etiqueta_w_mm * mm, height=etiqueta_h_mm * mm)
 
-        page_img.paste(img1, (x1, 0))
-        page_img.paste(img2, (x2, 0))
+        c.showPage()
 
-        final_pages.append(page_img)
-
-    # Salvar PDF final
-    buffer = io.BytesIO()
-    final_pages[0].save(buffer, format="PDF", save_all=True, append_images=final_pages[1:])
+    c.save()
     buffer.seek(0)
 
     st.download_button(
-        label="Baixar PDF Final (40×25 mm, 2 colunas)",
+        label="Baixar PDF Final (80×25 mm, 2 etiquetas)",
         data=buffer,
-        file_name="etiquetas_40x25mm_duas_colunas.pdf",
+        file_name="etiquetas_80x25mm.pdf",
         mime="application/pdf"
     )
 
-    st.success("PDF gerado com sucesso!")
+    st.success("PDF gerado com tamanho real! Agora a Zebra imprime perfeito.")
