@@ -1,5 +1,5 @@
 import streamlit as st
-from pdf2image import convert_from_bytes
+import fitz  # PyMuPDF
 from PIL import Image
 import io
 
@@ -9,22 +9,29 @@ st.write("Envie o PDF original da Shopee (60×40 mm). O app gera um PDF com duas
 uploaded_file = st.file_uploader("Envie o PDF original", type=["pdf"])
 
 if uploaded_file:
-    # Converte cada página do PDF para imagem
-    pages = convert_from_bytes(uploaded_file.read(), dpi=200)
+    pdf_bytes = uploaded_file.read()
+
+    # Abre o PDF com PyMuPDF
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+
+    imagens = []
+
+    # Converte cada página em imagem
+    for page in doc:
+        pix = page.get_pixmap(dpi=200)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        imagens.append(img)
 
     # Reduzir para 37,5×25 mm (aprox 142×95 px a 96 DPI)
-    resized = []
-    for img in pages:
-        resized.append(img.resize((142, 95), Image.LANCZOS))
+    resized = [img.resize((142, 95), Image.LANCZOS) for img in imagens]
 
-    # Criar PDF final com 2 etiquetas por página
+    # Criar páginas com 2 etiquetas lado a lado
     final_pages = []
-
     for i in range(0, len(resized), 2):
         img1 = resized[i]
         img2 = resized[i+1] if i+1 < len(resized) else resized[i]
 
-        # Página branca 80×25 mm (aprox 303×95 px)
+        # Página branca 303×95 px (80×25 mm)
         page_img = Image.new("RGB", (303, 95), "white")
         page_img.paste(img1, (0, 0))
         page_img.paste(img2, (161, 0))
